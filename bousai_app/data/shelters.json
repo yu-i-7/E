@@ -27,6 +27,8 @@
     "id": 9,
     "name": "あいうｙ",
     "address": "青森県青森市大谷小谷１−５",
+    "latitude": 40.735302,
+    "longitude": 140.690491,
     "district": "青森",
     "capacity": 300,
     "disasters": [
@@ -40,6 +42,8 @@
       "barrier_free"
     ],
     "status": "未開設",
-    "opening_status": "未開設"
+    "opening_status": "未開設",
+    "current_occupants": null,
+    "crowd_status": "混雑"
   }
 ]

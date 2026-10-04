@@ -54,7 +54,8 @@ class DisasterDashboardTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn('災害情報を読み込めませんでした'.encode(), response.data)
-        self.assertNotIn('該当する災害情報はありません'.encode(), response.data)
+        page_content = response.data.split(b'<script', 1)[0]
+        self.assertNotIn('該当する災害情報はありません'.encode(), page_content)
 
     def test_home_separates_active_instructions_from_disaster_information(self):
         active = {

@@ -24,6 +24,14 @@
       background: #f7f9fc;
     }
 
+    body.text-large {
+      font-size: 1.15rem;
+    }
+
+    body.text-xlarge {
+      font-size: 1.3rem;
+    }
+
     .site-header {
       position: relative;
       z-index: 1000;
@@ -136,6 +144,73 @@
       font-size: 13px;
     }
 
+    .display-tools {
+      display: flex;
+      width: min(100% - 48px, 1380px);
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin: 0 auto;
+      padding: 0 0 10px;
+      color: #fff;
+      font-size: 14px;
+    }
+
+    .display-tools-label {
+      margin-right: 4px;
+      font-weight: 700;
+    }
+
+    .display-tools button {
+      min-height: 38px;
+      padding: 6px 12px;
+      border: 1px solid rgb(255 255 255 / 70%);
+      border-radius: 6px;
+      color: #fff;
+      background: transparent;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .display-tools button[aria-pressed="true"] {
+      color: #193b70;
+      background: #fff;
+    }
+
+    .display-tools button:focus-visible {
+      outline: 3px solid #ffdc80;
+      outline-offset: 2px;
+    }
+
+    .language-toggle {
+      display: flex;
+      gap: 4px;
+      margin-left: auto;
+      padding-left: 12px;
+      border-left: 1px solid rgb(255 255 255 / 45%);
+    }
+
+    .language-toggle button {
+      min-height: 38px;
+      padding: 6px 10px;
+      border: 1px solid rgb(255 255 255 / 70%);
+      border-radius: 6px;
+      color: #fff;
+      background: transparent;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .language-toggle button[aria-pressed="true"] {
+      color: #193b70;
+      background: #fff;
+    }
+
+    .language-toggle button:focus-visible {
+      outline: 3px solid #ffdc80;
+      outline-offset: 2px;
+    }
+
     main {
       width: min(100% - 40px, 910px);
       margin: 32px auto 64px;
@@ -164,6 +239,11 @@
         right: 16px;
       }
 
+      .display-tools {
+        width: calc(100% - 32px);
+        padding-bottom: 9px;
+      }
+
       main {
         width: calc(100% - 28px);
         margin-top: 20px;
@@ -185,7 +265,7 @@
           'shelter_detail': '避難所詳細',
           'shelter_register': '避難所登録',
           'disaster_information': '災害情報',
-          'board': '指示の発信',
+          'board': '指示・発信ボード',
           'login': 'ログイン',
           'logout': 'ログアウト'
         }.get(request.endpoint, '防災アプリ') }}
@@ -196,12 +276,22 @@
         </svg>
       </button>
     </div>
+    <div class="display-tools" role="group" aria-label="表示設定">
+      <span class="display-tools-label">文字サイズ</span>
+      <button type="button" data-text-size="standard" aria-pressed="true">標準</button>
+      <button type="button" data-text-size="large" aria-pressed="false">大</button>
+      <button type="button" data-text-size="xlarge" aria-pressed="false">特大</button>
+      <div class="language-toggle" role="group" aria-label="Language">
+        <button type="button" data-language="ja" aria-pressed="true">日本語</button>
+        <button type="button" data-language="en" aria-pressed="false">English</button>
+      </div>
+    </div>
     <nav class="site-nav" id="siteNav" aria-label="メインメニュー">
       <a href="{{ url_for('index') }}" {% if request.endpoint == 'index' %}aria-current="page"{% endif %}>ホーム</a>
       <a href="{{ url_for('shelter_search') }}" {% if request.endpoint in ('shelter_search', 'search_results', 'all_shelters', 'shelter_detail') %}aria-current="page"{% endif %}>避難所検索</a>
       <a href="{{ url_for('shelter_register') }}" {% if request.endpoint == 'shelter_register' %}aria-current="page"{% endif %}>避難所登録</a>
       <a href="{{ url_for('disaster_information') }}" {% if request.endpoint == 'disaster_information' %}aria-current="page"{% endif %}>災害情報</a>
-      <a href="{{ url_for('board') }}" {% if request.endpoint == 'board' %}aria-current="page"{% endif %}>指示の発信</a>
+      <a href="{{ url_for('board') }}" {% if request.endpoint == 'board' %}aria-current="page"{% endif %}>指示・発信ボード</a>
       {% if session.logged_in %}
         <div class="nav-account">ログイン中{% if session.username %}（{{ session.username }}）{% endif %}</div>
         <a href="{{ url_for('logout') }}">ログアウト</a>
@@ -219,11 +309,288 @@
     (() => {
       const toggle = document.querySelector('.menu-toggle');
       const nav = document.getElementById('siteNav');
+      const languageButtons = document.querySelectorAll('[data-language]');
+      const translations = {
+        '防災アプリ': 'Disaster Preparedness App',
+        '指示・発信ボード': 'Instructions & Announcements',
+        '避難所検索結果': 'Shelter Search Results',
+        '検索結果': 'Search Results',
+        '避難所一覧': 'All Shelters',
+        '避難所詳細': 'Shelter Details',
+        '避難所登録': 'Shelter Management',
+        '避難所名': 'Shelter Name',
+        '避難所を検索': 'Search Shelters',
+        '避難所データ': 'Shelter Data',
+        '避難所検索': 'Find a Shelter',
+        '災害情報（状況のお知らせ）': 'Disaster Information',
+        '管理者ログイン': 'Administrator Login',
+        '指示・発信ボードで詳細を確認': 'View details on the Instructions & Announcements board',
+        '指示ボードで詳細を確認': 'View details on the Instructions & Announcements board',
+        '災害情報一覧を見る': 'View All Disaster Information',
+        '現在、有効な住民向け指示はありません。': 'There are no active public instructions.',
+        '災害情報を読み込めませんでした。時間をおいて再度お試しください。': 'Could not load disaster information. Please try again later.',
+        '位置情報が登録された避難所はありません。地図にマーカーは表示されていません。': 'No shelters with registered locations. No map markers are shown.',
+        '避難所データを読み込めないため、マーカーは表示されていません。': 'Shelter data could not be loaded. No map markers are shown.',
+        '現在地を地図に表示しました。位置情報はこの画面内でのみ使用しています。': 'Your location is shown on the map and is only used on this page.',
+        '現在地を取得しています...': 'Getting your location...',
+        'このブラウザーでは現在地を取得できません。': 'This browser cannot access your location.',
+        '地図を読み込めませんでした。避難所の位置情報は表示されていません。': 'Could not load the map. Shelter locations are unavailable.',
+        '地図を読み込めないため、現在地を表示できません。': 'Your location cannot be shown because the map is unavailable.',
+        '現在地を取得できませんでした。位置情報の設定をご確認ください。': 'Could not get your location. Check your location settings.',
+        '位置情報の利用が許可されませんでした。ブラウザーの設定をご確認ください。': 'Location access was denied. Check your browser settings.',
+        '現在地の取得がタイムアウトしました。もう一度お試しください。': 'Location request timed out. Please try again.',
+        '気象情報を読み込んでいます...': 'Loading weather information...',
+        '気象情報の取得に失敗しました。最新情報を確認できません。': 'Could not retrieve current weather information.',
+        '気象情報の更新に失敗しました。以下には前回取得した情報を表示しています。': 'Weather update failed. Showing the last available information.',
+        '警報・注意報が発表されています': 'Warnings or advisories are in effect',
+        '現在、警報・注意報は発表されていません': 'There are no active warnings or advisories',
+        '警報・注意報の有無を確認できません': 'Could not check for warnings or advisories',
+        '青森市 気象警報・注意報': 'Aomori City Weather Warnings & Advisories',
+        '住民向け指示': 'Public Instructions',
+        '住民向け発信': 'Public Announcements',
+        '避難所マップ': 'Shelter Map',
+        '避難所を探す': 'Find a Shelter',
+        '避難所を検索する': 'Search Shelters',
+        '避難所を登録': 'Register Shelter',
+        '避難所情報を編集': 'Edit Shelter Information',
+        '登録済み避難所': 'Registered Shelters',
+        '避難所データがありません。': 'No shelter data is available.',
+        '名称未登録': 'Name not provided',
+        '避難所が見つかりません': 'Shelter Not Found',
+        '指定されたIDの避難所は登録されていないか、削除された可能性があります。': 'This shelter may not be registered or may have been removed.',
+        '避難所名や登録済みの地域名から検索できます。': 'Search by shelter name or registered district.',
+        '避難所名・地域名': 'Shelter name or district',
+        '地域で絞り込む': 'Filter by district',
+        'すべての地域': 'All districts',
+        '災害種別': 'Hazard Type',
+        '選択した条件をすべて満たす避難所を検索します。': 'Results must match all selected filters.',
+        '災害種別・設備条件は避難所データの登録情報で判定します。未登録の項目は条件に一致しません。現在の避難所データにこれらの情報が登録されていない場合、条件を指定すると検索結果が0件になることがあります。': 'Disaster and facility filters use registered shelter data. Shelters with missing information will not match, so results may be empty.',
+        '検索結果は登録情報の一覧です。現在の開設状況や安全性を示すものではありません。避難の際は自治体などの最新情報を確認してください。': 'Results are based on registered information and do not indicate current availability or safety. Check local authorities’ latest guidance before evacuating.',
+        'この一覧は登録情報に基づく検索結果です。現在の開設状況や安全性を示すものではありません。避難の際は自治体などの最新情報を確認してください。': 'This list is based on registered information and does not indicate current availability or safety. Check local authorities’ latest guidance before evacuating.',
+        '条件に合う避難所が見つかりませんでした。条件に合う避難所がありません。検索語や地域の指定を変更するか、条件をクリアして再検索してください。条件に必要な情報が避難所データに登録されていない場合も、結果は0件になります。': 'No shelters match your filters. Change your search or clear the filters and try again. Missing shelter information can also result in no matches.',
+        '検索画面に戻る（条件を保持）': 'Back to Search (Keep Filters)',
+        '条件をクリアして検索する': 'Clear Filters and Search',
+        'トップページへ戻る': 'Back to Home',
+        '検索結果に戻る': 'Back to Results',
+        '結果は登録情報に基づく検索結果です。': 'Results are based on registered information.',
+        '住所': 'Address',
+        '住所（必須）': 'Address (required)',
+        '地域・地区（任意）': 'District (optional)',
+        '地域・地区': 'District',
+        '地域': 'District',
+        '地域で絞り込む': 'Filter by district',
+        '収容人数': 'Capacity',
+        '現在の避難者数': 'Current Occupants',
+        '混雑状況': 'Crowd Level',
+        '開設状況': 'Opening Status',
+        '現在の開設状況': 'Current Status',
+        '対応災害': 'Supported Hazards',
+        '対応する災害種別': 'Supported Hazard Types',
+        '対応可能な災害種別': 'Supported Hazard Types',
+        '設備情報': 'Facilities',
+        '避難所設備': 'Shelter Facilities',
+        '設備・利用条件': 'Facilities & Accessibility',
+        '登録情報に基づく表示です。未登録の項目は、未対応・利用不可を意味しません。': 'Based on registered information. Missing information does not mean unavailable or unsupported.',
+        'このページは登録情報を表示しています。現在の開設状況や安全性については、自治体などの最新情報を確認してください。': 'This page shows registered information. Check local authorities for current status and safety guidance.',
+        '未登録（非対応を意味しません）': 'Not provided (does not mean unsupported)',
+        '未登録（利用不可を意味しません）': 'Not provided (does not mean unavailable)',
+        '未登録（閉鎖中を意味しません）': 'Not provided (does not mean closed)',
+        '未登録': 'Not provided',
+        '開設中': 'Open',
+        '未開設': 'Not Open',
+        '閉鎖中': 'Closed',
+        '空きあり': 'Space Available',
+        '混雑': 'Crowded',
+        '満員': 'Full',
+        '地震': 'Earthquake',
+        '津波': 'Tsunami',
+        '洪水': 'Flood',
+        '土砂災害': 'Landslide',
+        '火災': 'Fire',
+        '暴風・大雪': 'Storm / Heavy Snow',
+        'ペット同伴': 'Pets Allowed',
+        'ペット可': 'Pets Allowed',
+        'バリアフリー': 'Accessible',
+        '車いす対応': 'Wheelchair Accessible',
+        '非常用電源': 'Emergency Power',
+        '授乳室': 'Nursing Room',
+        '多目的トイレ': 'Accessible Restroom',
+        '検索画面に戻る': 'Back to Search',
+        '記録された災害情報を受信日時の新しい順に表示しています。現在の状況とは異なる場合があります。最新の気象警報・注意報はホーム画面で取得日時と発表日時を確認してください。住民向けの行動要請は「指示・発信ボード」をご確認ください。': 'Disaster information is shown newest first and may not reflect current conditions. Check the home page for current weather alerts and the Instructions & Announcements board for public guidance.',
+        '情報の種別': 'Information Type',
+        'すべて': 'All',
+        '緊急': 'Emergency',
+        '警報': 'Warning',
+        '注意報': 'Advisory',
+        '情報': 'Information',
+        '大': 'Large',
+        '高': 'High',
+        '中': 'Medium',
+        '低': 'Low',
+        '住民': 'Residents',
+        '住民向け': 'For Residents',
+        '担当部署': 'Responsible Department',
+        '防災担当部署': 'Disaster Management Department',
+        '道路管理担当部署': 'Road Management Department',
+        'その他': 'Other',
+        '絞り込む': 'Filter',
+        '発表された警報・注意報はありません': 'No warnings or advisories have been issued',
+        '該当する災害情報はありません。': 'No matching disaster information.',
+        'ホームに戻る': 'Back to Home',
+        '災害対応の指示を登録': 'Create Disaster Response Instruction',
+        '住民向けに発信': 'Create Public Announcement',
+        '災害情報（状況のお知らせ）とは別の、住民への発信履歴です。': 'This is a record of public announcements, separate from disaster information.',
+        '指示一覧': 'Instructions',
+        '住民向け発信履歴': 'Public Announcement History',
+        '登録されている指示はありません。': 'There are no registered instructions.',
+        '発信履歴はありません。': 'There is no announcement history.',
+        '未対応': 'Not Started',
+        '新しい順': 'Newest First',
+        '緊急度順': 'Priority',
+        '対象地区': 'Target District',
+        '対象': 'Audience',
+        '宛先': 'Recipient',
+        '発信先': 'Recipient',
+        '緊急度': 'Priority',
+        '緊急度：高': 'Priority: High',
+        '緊急度：中': 'Priority: Medium',
+        '緊急度：低': 'Priority: Low',
+        '指示内容（必須・2000文字以内）': 'Instruction (required, up to 2,000 characters)',
+        '発信内容（必須・2000文字以内）': 'Announcement (required, up to 2,000 characters)',
+        '避難先（任意）': 'Evacuation Shelter (optional)',
+        '対応状況': 'Response Status',
+        '状況を更新': 'Update Status',
+        'ホーム画面に表示する': 'Show on Home Page',
+        '表示する': 'Show',
+        '表示しない': 'Hide',
+        '確認して指示を登録': 'Review and Submit Instruction',
+        '確認して発信': 'Review and Publish',
+        '作成日時': 'Created',
+        '発信日時': 'Published',
+        '発信履歴': 'Announcement History',
+        '避難所登録・管理': 'Shelter Management',
+        '避難所名（必須）': 'Shelter Name (required)',
+        '収容人数（必須・半角数字）': 'Capacity (required, digits only)',
+        '現在の避難者数（任意・半角数字）': 'Current Occupants (optional, digits only)',
+        '地図の位置情報（任意）': 'Map Location (optional)',
+        '国土地理院の住所検索を使い、登録した住所から緯度・経度を自動取得して地図に表示します。位置を取得できない場合は登録を完了できません。': 'The Geospatial Information Authority of Japan will find coordinates from the address and show the shelter on the map. Registration cannot be completed if no location is found.',
+        '確認して登録': 'Review and Register',
+        '確認して更新': 'Review and Update',
+        '編集をキャンセル': 'Cancel Editing',
+        '位置情報登録済み': 'Location Registered',
+        '位置情報未登録': 'Location Not Registered',
+        '削除': 'Delete',
+        '編集': 'Edit',
+        '指示・発信ボード・避難所登録の利用には管理者権限が必要です。': 'Administrator access is required to use the Instructions & Announcements board and shelter management.',
+        'パスワード（「123」と入力してください）': 'Password',
+        '標準': 'Standard',
+        '大': 'Large',
+        '特大': 'Extra Large',
+        '文字サイズ': 'Text Size',
+        '日本語': 'Japanese',
+        'メニューを開く': 'Open Menu',
+        'メニューを閉じる': 'Close Menu',
+        'メインメニュー': 'Main Menu',
+        '表示設定': 'Display Settings',
+        'ホーム': 'Home',
+        'ログイン中': 'Signed In',
+        '未ログイン': 'Not Signed In',
+        'ログイン': 'Log In',
+        'ログアウト': 'Log Out',
+        '地図の凡例': 'Map Legend',
+        '現在地を地図に表示': 'Show My Location',
+        '例：小学校、地域名': 'e.g. school, district',
+        '例：中央地区': 'e.g. Central District',
+        '例：中央区': 'e.g. Central District',
+        '例：中央小学校': 'e.g. Central Elementary School',
+        '例：青森市中央一丁目1番1号': 'e.g. 1-1-1 Chuo, Aomori City',
+        '例：300': 'e.g. 300',
+        '例：120': 'e.g. 120',
+        '現在の避難者数：': 'Current occupants: ',
+        '開設状況：': 'Status: ',
+        '混雑状況：': 'Crowd level: ',
+        '住所：': 'Address: ',
+        '発信日時：': 'Published: ',
+        '発表日時：': 'Issued: ',
+        '受信日時：': 'Received: ',
+        '対象地区：': 'Target district: ',
+        '収容人数：': 'Capacity: ',
+        '地域：': 'District: ',
+        '緊急度：': 'Priority: ',
+        '対応状況：': 'Response status: ',
+        '対象：': 'Audience: ',
+        '宛先：': 'Recipient: ',
+        '避難先：': 'Shelter: ',
+        '内容：': 'Message: ',
+        '件の避難所が見つかりました。': ' shelters found.'
+      };
+      const translationEntries = Object.entries(translations).sort((left, right) => right[0].length - left[0].length);
+      const originalText = new WeakMap();
+      const originalAttributes = new WeakMap();
+      const attributesToTranslate = ['aria-label', 'placeholder', 'title', 'alt'];
+      let currentLanguage = localStorage.getItem('language') === 'en' ? 'en' : 'ja';
+      const originalTitle = document.title;
+
+      function translate(value) {
+        let result = value.replace(/(\d+)件の避難所が見つかりました。/g, '$1 shelters found.');
+        translationEntries.forEach(([japanese, english]) => {
+          if (Array.from(japanese).length > 2 || result.trim() === japanese) {
+            result = result.split(japanese).join(english);
+          }
+        });
+        return result;
+      }
+
+      function updateTextNode(node) {
+        const source = originalText.get(node) ?? node.nodeValue;
+        originalText.set(node, source);
+        node.nodeValue = currentLanguage === 'en' ? translate(source) : source;
+      }
+
+      function updateElement(element) {
+        if (!(element instanceof Element) || element.closest('[data-no-translate]')) return;
+        let values = originalAttributes.get(element);
+        if (!values) {
+          values = {};
+          attributesToTranslate.forEach((attribute) => {
+            if (element.hasAttribute(attribute)) values[attribute] = element.getAttribute(attribute);
+          });
+          originalAttributes.set(element, values);
+        }
+        Object.entries(values).forEach(([attribute, source]) => {
+          element.setAttribute(attribute, currentLanguage === 'en' ? translate(source) : source);
+        });
+        const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, {
+          acceptNode(node) {
+            return node.parentElement.closest('script, style, textarea, [data-no-translate]')
+              ? NodeFilter.FILTER_REJECT
+              : NodeFilter.FILTER_ACCEPT;
+          }
+        });
+        while (walker.nextNode()) updateTextNode(walker.currentNode);
+      }
+
+      function setMenuLabel() {
+        const label = toggle.getAttribute('aria-expanded') === 'true' ? 'メニューを閉じる' : 'メニューを開く';
+        toggle.setAttribute('aria-label', currentLanguage === 'en' ? translate(label) : label);
+      }
+
+      function setLanguage(language) {
+        currentLanguage = language;
+        document.documentElement.lang = language;
+        document.title = language === 'en' ? translate(originalTitle) : originalTitle;
+        updateElement(document.body);
+        languageButtons.forEach((button) => {
+          button.setAttribute('aria-pressed', String(button.dataset.language === language));
+        });
+        localStorage.setItem('language', language);
+        setMenuLabel();
+      }
 
       function setMenuOpen(isOpen) {
         nav.classList.toggle('is-open', isOpen);
         toggle.setAttribute('aria-expanded', String(isOpen));
-        toggle.setAttribute('aria-label', isOpen ? 'メニューを閉じる' : 'メニューを開く');
+        setMenuLabel();
       }
 
       toggle.addEventListener('click', () => {
@@ -240,6 +607,38 @@
           toggle.focus();
         }
       });
+
+      const sizeButtons = document.querySelectorAll('[data-text-size]');
+      const savedSize = localStorage.getItem('text-size') || 'standard';
+
+      function setTextSize(size) {
+        document.body.classList.toggle('text-large', size === 'large');
+        document.body.classList.toggle('text-xlarge', size === 'xlarge');
+        sizeButtons.forEach((button) => {
+          button.setAttribute('aria-pressed', String(button.dataset.textSize === size));
+        });
+        localStorage.setItem('text-size', size);
+      }
+
+      sizeButtons.forEach((button) => {
+        button.addEventListener('click', () => setTextSize(button.dataset.textSize));
+      });
+      setTextSize(['standard', 'large', 'xlarge'].includes(savedSize) ? savedSize : 'standard');
+      languageButtons.forEach((button) => {
+        button.addEventListener('click', () => setLanguage(button.dataset.language));
+      });
+      setLanguage(currentLanguage);
+
+      const languageObserver = new MutationObserver((mutations) => {
+        if (currentLanguage !== 'en') return;
+        mutations.forEach((mutation) => {
+          mutation.addedNodes.forEach((node) => {
+            if (node.nodeType === Node.TEXT_NODE && !node.parentElement.closest('[data-no-translate]')) updateTextNode(node);
+            else if (node instanceof Element) updateElement(node);
+          });
+        });
+      });
+      languageObserver.observe(document.body, { childList: true, subtree: true });
     })();
   </script>
   {% block scripts %}{% endblock %}

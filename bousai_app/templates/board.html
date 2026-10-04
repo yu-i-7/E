@@ -206,45 +206,6 @@
       font: inherit;
     }
 
-    .board-display-tools {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 16px;
-    }
-
-    .board-display-tools button {
-      min-height: 42px;
-      padding: 7px 11px;
-      border: 1px solid #aebaca;
-      border-radius: 8px;
-      color: #294b7b;
-      background: #fff;
-      font: inherit;
-      cursor: pointer;
-    }
-
-    .board-display-tools button[aria-pressed="true"] {
-      border-color: #2855a1;
-      color: #fff;
-      background: #2855a1;
-    }
-
-    .board-page.text-large {
-      font-size: 1.15rem;
-    }
-
-    .board-page.text-xlarge {
-      font-size: 1.3rem;
-    }
-
-    .board-page.easy-japanese .easy-content {
-      font-size: 1.08em;
-      line-height: 2;
-      letter-spacing: .03em;
-    }
-
     @media (max-width: 600px) {
       .board-card {
         padding: 22px 18px;
@@ -340,7 +301,7 @@
           {% set priority = instruction.priority or instruction.urgency or '未登録' %}
           <li class="instruction-record{% if priority == '高' or priority == '緊急' %} priority-high{% elif priority == '中' %} priority-medium{% elif priority == '低' %} priority-low{% endif %}">
             <span class="priority-label">緊急度：{{ priority }}</span>
-            <span class="easy-content">{{ instruction.content or '未登録' }}</span>
+            <span class="easy-content" data-no-translate>{{ instruction.content or '未登録' }}</span>
             <div class="instruction-meta">
               <span>対象：{{ instruction.target or '未登録' }}</span>
               <span>対象地区：{{ instruction.target_area or '未登録' }}</span>
@@ -375,7 +336,7 @@
       <ul class="announcement-records">
         {% for announcement in announcements %}
           <li class="announcement-record">
-            <span class="easy-content">{{ announcement.content }}</span>
+            <span class="easy-content" data-no-translate>{{ announcement.content }}</span>
             <div class="announcement-meta">
               <span>発信先：{{ announcement.recipient }}</span>
               <span>対象地区：{{ announcement.target_area or '未指定' }}</span>
@@ -390,17 +351,6 @@
     {% endif %}
   </section>
 
-  <section class="board-card" aria-labelledby="display-tools-title">
-    <h2 id="display-tools-title">表示補助</h2>
-    <div class="board-display-tools" aria-label="表示補助設定">
-      <span>文字サイズ</span>
-      <button type="button" data-text-size="standard" aria-pressed="true">標準</button>
-      <button type="button" data-text-size="large" aria-pressed="false">大</button>
-      <button type="button" data-text-size="xlarge" aria-pressed="false">特大</button>
-      <button type="button" id="easyJapaneseToggle" aria-pressed="false">やさしい日本語</button>
-    </div>
-    <p id="easyJapaneseStatus" role="status" aria-live="polite"></p>
-  </section>
 </div>
 {% endblock %}
 
@@ -418,53 +368,5 @@
     });
   });
 
-  const boardPage = document.getElementById('boardPage');
-  document.querySelectorAll('[data-text-size]').forEach((button) => {
-    button.addEventListener('click', () => {
-      boardPage.classList.remove('text-large', 'text-xlarge');
-      if (button.dataset.textSize === 'large') boardPage.classList.add('text-large');
-      if (button.dataset.textSize === 'xlarge') boardPage.classList.add('text-xlarge');
-      document.querySelectorAll('[data-text-size]').forEach((item) => {
-        item.setAttribute('aria-pressed', String(item === button));
-      });
-    });
-  });
-
-  const easyJapaneseToggle = document.getElementById('easyJapaneseToggle');
-  const boardTextNodes = [];
-  const textWalker = document.createTreeWalker(boardPage, NodeFilter.SHOW_TEXT, {
-    acceptNode(node) {
-      return node.parentElement.closest('script, style, textarea, input') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
-    }
-  });
-  while (textWalker.nextNode()) {
-    boardTextNodes.push({ node: textWalker.currentNode, original: textWalker.currentNode.nodeValue });
-  }
-  const easyJapaneseTerms = [
-    ['対応状況', '今の状況'],
-    ['対象地区', '対象の地域'],
-    ['避難先', 'にげる場所'],
-    ['緊急度', '急ぎの度合い'],
-    ['発信日時', '知らせた日時'],
-    ['発信履歴', '知らせた記録'],
-    ['登録済み', '登録した'],
-    ['未対応', 'まだ対応していない'],
-    ['対応中', '対応している'],
-    ['完了', '終わり'],
-    ['確認して', '内容を見て']
-  ];
-  easyJapaneseToggle.addEventListener('click', () => {
-    const enabled = easyJapaneseToggle.getAttribute('aria-pressed') !== 'true';
-    easyJapaneseToggle.setAttribute('aria-pressed', String(enabled));
-    boardPage.classList.toggle('easy-japanese', enabled);
-    boardTextNodes.forEach(({ node, original }) => {
-      node.nodeValue = enabled
-        ? easyJapaneseTerms.reduce((text, [term, plain]) => text.replaceAll(term, plain), original)
-        : original;
-    });
-    document.getElementById('easyJapaneseStatus').textContent = enabled
-      ? 'やさしい日本語表示を有効にしました。文章を大きく、読みやすく表示します。'
-      : '通常の表示に戻しました。';
-  });
 </script>
 {% endblock %}

@@ -271,6 +271,7 @@
           {% for shelter in results %}
             {% set shelter_status = shelter.status|default(shelter.opening_status|default('未登録'), true) %}
             {% set capacity = shelter.capacity|default(none) %}
+            {% set registered_crowd_status = shelter.crowd_status|default('', true) %}
             {% set occupants = namespace(value=none) %}
             {% for count_key in ('current_occupants', 'current_evacuees', 'evacuee_count', 'current_evacuee_count') %}
               {% if occupants.value is none and shelter[count_key] is defined and shelter[count_key] is number and shelter[count_key] is not boolean and shelter[count_key] >= 0 %}
@@ -281,19 +282,19 @@
             <li class="shelter-item">
               <p class="shelter-name">
                 {% if shelter.id is defined %}
-                  <a href="{{ url_for('shelter_detail', shelter_id=shelter.id, return_to=request.full_path) }}">{{ shelter.name|default('名称未登録', true) }}</a>
+                  <a {% if shelter.name %}data-no-translate{% endif %} href="{{ url_for('shelter_detail', shelter_id=shelter.id, return_to=request.full_path) }}">{{ shelter.name|default('名称未登録', true) }}</a>
                 {% else %}
-                  {{ shelter.name|default('名称未登録', true) }}
+                  <span data-no-translate>{{ shelter.name|default('名称未登録', true) }}</span>
                 {% endif %}
               </p>
               <dl class="shelter-comparison">
                 <div>
                   <dt>住所</dt>
-                  <dd>{{ shelter.address|default('未登録', true) }}</dd>
+                  <dd>{% if shelter.address %}<span data-no-translate>{{ shelter.address }}</span>{% else %}未登録{% endif %}</dd>
                 </div>
                 <div>
                   <dt>地域</dt>
-                  <dd>{{ shelter.district|default('未登録', true) }}</dd>
+                  <dd>{% if shelter.district %}<span data-no-translate>{{ shelter.district }}</span>{% else %}未登録{% endif %}</dd>
                 </div>
                 <div>
                   <dt>開設状況</dt>
@@ -314,7 +315,13 @@
                 <div>
                   <dt>混雑状況</dt>
                   <dd>
-                    {% if occupants.value is not none and capacity is number and capacity is not boolean and capacity > 0 %}
+                    {% if registered_crowd_status == '満員' %}
+                      <span class="crowd-status is-full">満員</span>
+                    {% elif registered_crowd_status == '混雑' %}
+                      <span class="crowd-status is-busy">混雑</span>
+                    {% elif registered_crowd_status == '空きあり' %}
+                      <span class="crowd-status is-available">空きあり</span>
+                    {% elif occupants.value is not none and capacity is number and capacity is not boolean and capacity > 0 %}
                       {% set occupancy_ratio = occupants.value / capacity %}
                       {% if occupants.value >= capacity %}
                         <span class="crowd-status is-full">満員</span>

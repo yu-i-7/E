@@ -1,5 +1,5 @@
 from flask import Flask, jsonify, request, render_template, session, redirect, url_for
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse, urljoin, urlencode
 from functools import wraps
 import hmac
 import json
@@ -7,6 +7,7 @@ import os
 import re
 import secrets
 import tempfile
+import threading
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
@@ -327,6 +328,46 @@ def normalize_instruction_status(status):
         '終了': '完了'
     }.get(status, status if status in INSTRUCTION_STATUSES else '未対応')
 
+_shelter_geocode_cache = {}
+_shelter_geocode_lock = threading.Lock()
+
+def geocode_address(address):
+    normalized_address = ' '.join(address.split())
+    if normalized_address in _shelter_geocode_cache:
+        return _shelter_geocode_cache[normalized_address]
+
+    global _shelter_geocode_last_request
+    with _shelter_geocode_lock:
+        if normalized_address in _shelter_geocode_cache:
+            return _shelter_geocode_cache[normalized_address]
+        query = urlencode({'q': normalized_address})
+        request = urllib.request.Request(
+            f'https://msearch.gsi.go.jp/address-search/AddressSearch?{query}',
+            headers={
+                'User-Agent': 'BousaiShelterApp/1.0',
+                'Accept': 'application/json'
+            }
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=8) as response:
+                results = json.load(response)
+        except (OSError, TimeoutError, ValueError, urllib.error.URLError):
+            app.logger.warning('住所から位置情報を取得できませんでした')
+            return None
+
+        if not isinstance(results, list) or not results:
+            return None
+        for feature in results:
+            try:
+                longitude, latitude = map(float, feature['geometry']['coordinates'][:2])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if -90 <= latitude <= 90 and -180 <= longitude <= 180:
+                coordinates = (latitude, longitude)
+                _shelter_geocode_cache[normalized_address] = coordinates
+                return coordinates
+        return None
+
 def get_map_shelters():
     result = []
     for shelter in shelters:
@@ -344,9 +385,11 @@ def get_map_shelters():
         result.append({
             'id': shelter.get('id'),
             'name': str(shelter.get('name') or '名称未登録'),
+            'address': str(shelter.get('address') or '住所未登録'),
             'latitude': latitude,
             'longitude': longitude,
-            'opening_status': str(shelter.get('opening_status') or '未登録')
+            'opening_status': str(shelter.get('opening_status') or shelter.get('status') or '未登録'),
+            'crowd_status': str(shelter.get('crowd_status') or '未登録')
         })
     return result
 
@@ -627,6 +670,8 @@ def shelter_register():
         'address': editing_shelter.get('address', '') if editing_shelter else '',
         'district': editing_shelter.get('district', '') if editing_shelter else '',
         'capacity': str(editing_shelter.get('capacity', '')) if editing_shelter else '',
+        'current_occupants': str(editing_shelter.get('current_occupants', '')) if editing_shelter and editing_shelter.get('current_occupants') is not None else '',
+        'crowd_status': editing_shelter.get('crowd_status', '未登録') if editing_shelter else '未登録',
         'disasters': (
             editing_shelter.get('disasters', editing_shelter.get('disaster_types', []))
             if editing_shelter else []
@@ -646,7 +691,8 @@ def shelter_register():
     message = ''
     success_messages = {
         'created': '避難所を登録しました。',
-        'updated': '避難所情報を更新しました。'
+        'updated': '避難所情報を更新しました。',
+        'deleted': '避難所を削除しました。'
     }
     success = request.args.get('success') in success_messages
     message = success_messages.get(request.args.get('success', ''), '')
@@ -656,6 +702,8 @@ def shelter_register():
             'address': request.form.get('address', '').strip(),
             'district': request.form.get('district', '').strip(),
             'capacity': request.form.get('capacity', '').strip(),
+            'current_occupants': request.form.get('current_occupants', '').strip(),
+            'crowd_status': request.form.get('crowd_status', '未登録'),
             'disasters': request.form.getlist('disasters'),
             'facilities': request.form.getlist('facilities'),
             'status': request.form.get('status', '')
@@ -689,6 +737,13 @@ def shelter_register():
             error, message = True, '収容人数は1以上で入力してください。'
         elif len(form_data['district']) > 80:
             error, message = True, '地域名は80文字以内で入力してください。'
+        elif form_data['current_occupants'] and (
+            not re.fullmatch(r'[0-9]+', form_data['current_occupants'])
+            or len(form_data['current_occupants']) > 9
+        ):
+            error, message = True, '現在の避難者数は半角数字9桁以内で入力してください。'
+        elif form_data['crowd_status'] not in ('未登録', '空きあり', '混雑', '満員'):
+            error, message = True, '混雑状況を選択してください。'
         elif any(value not in dict(SHELTER_DISASTER_OPTIONS) for value in form_data['disasters']):
             error, message = True, '対応可能な災害種別に不正な値が含まれています。'
         elif any(value not in dict(SHELTER_FACILITY_OPTIONS) for value in form_data['facilities']):
@@ -708,6 +763,35 @@ def shelter_register():
                 (item for item in shelters if isinstance(item, dict) and item.get('id') == target_id),
                 None
             )
+            coordinates = None
+            if previous_record and previous_record.get('address') == form_data['address']:
+                try:
+                    saved_coordinates = (
+                        float(previous_record['latitude']),
+                        float(previous_record['longitude'])
+                    )
+                    if (
+                        -90 <= saved_coordinates[0] <= 90
+                        and -180 <= saved_coordinates[1] <= 180
+                    ):
+                        coordinates = saved_coordinates
+                except (KeyError, TypeError, ValueError):
+                    pass
+            if coordinates is None:
+                coordinates = geocode_address(form_data['address'])
+            if coordinates is None:
+                return render_template(
+                    'shelter_register.html',
+                    error=True,
+                    success=False,
+                    message='住所から地図の位置を取得できませんでした。住所を確認するか、時間をおいて再度お試しください。',
+                    form_data=form_data,
+                    shelters=[item for item in shelters if isinstance(item, dict)],
+                    disaster_options=SHELTER_DISASTER_OPTIONS,
+                    facility_options=SHELTER_FACILITY_OPTIONS,
+                    csrf_token=get_csrf_token(),
+                    editing_id=edit_id
+                ), 502
             updated_record = dict(previous_record or {})
             updated_record.update({
                 'id': target_id,
@@ -715,11 +799,15 @@ def shelter_register():
                 'address': form_data['address'],
                 'district': form_data['district'],
                 'capacity': int(form_data['capacity']),
+                'current_occupants': int(form_data['current_occupants']) if form_data['current_occupants'] else None,
+                'crowd_status': form_data['crowd_status'],
                 'disasters': list(dict.fromkeys(form_data['disasters'])),
                 'disaster_types': list(dict.fromkeys(form_data['disasters'])),
                 'facilities': list(dict.fromkeys(form_data['facilities'])),
                 'status': form_data['status'],
-                'opening_status': form_data['status']
+                'opening_status': form_data['status'],
+                'latitude': coordinates[0],
+                'longitude': coordinates[1]
             })
             if previous_record is None:
                 shelters.append(updated_record)
@@ -754,6 +842,32 @@ def shelter_register():
         csrf_token=get_csrf_token(),
         editing_id=edit_id
     ), 500 if server_error else 400 if error else 200
+
+@app.route('/shelters/<int:shelter_id>/delete', methods=['POST'])
+@login_required
+def delete_shelter(shelter_id):
+    if not valid_csrf_token(request.form.get('csrf_token', '')):
+        return '画面の有効期限が切れました。再読み込みしてもう一度お試しください。', 400
+    shelter = next(
+        (
+            item for item in shelters
+            if isinstance(item, dict)
+            and isinstance(item.get('id'), int)
+            and not isinstance(item.get('id'), bool)
+            and item.get('id') == shelter_id
+        ),
+        None
+    )
+    if shelter is None:
+        return '削除する避難所が見つかりません。', 404
+    index = shelters.index(shelter)
+    shelters.pop(index)
+    try:
+        save_shelters()
+    except OSError:
+        shelters.insert(index, shelter)
+        return '避難所情報を保存できませんでした。時間をおいて再度お試しください。', 500
+    return redirect(url_for('shelter_register', success='deleted'))
 
 # 避難所検索ページ
 @app.route('/shelter_search')
@@ -1129,4 +1243,4 @@ def api_weather_warnings():
     return jsonify(get_weather_warnings())
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', '5000')))

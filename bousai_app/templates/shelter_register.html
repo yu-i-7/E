@@ -108,6 +108,15 @@
       background: #effaf1;
     }
 
+    .shelter-map-note {
+      margin: 0;
+      padding: 12px 14px;
+      border-left: 4px solid #7990aa;
+      color: #43546a;
+      background: #f2f5f8;
+      line-height: 1.65;
+    }
+
     .shelter-actions {
       display: flex;
       flex-wrap: wrap;
@@ -128,6 +137,23 @@
       font: inherit;
       font-weight: 700;
       text-decoration: none;
+      cursor: pointer;
+    }
+
+    .shelter-delete-form {
+      display: inline-flex;
+      margin-left: 6px;
+    }
+
+    .shelter-delete-button {
+      min-height: 46px;
+      padding: 9px 16px;
+      border: 1px solid #a8493a;
+      border-radius: 8px;
+      color: #8d2e22;
+      background: #fff;
+      font: inherit;
+      font-weight: 700;
       cursor: pointer;
     }
 
@@ -198,6 +224,19 @@
         <label for="capacity">収容人数（必須・半角数字）</label>
         <input id="capacity" name="capacity" type="text" inputmode="numeric" pattern="[0-9]+" maxlength="9" required value="{{ form_data.capacity or '' }}" placeholder="例：300">
       </div>
+      <div class="shelter-field">
+        <label for="current_occupants">現在の避難者数（任意・半角数字）</label>
+        <input id="current_occupants" name="current_occupants" type="text" inputmode="numeric" pattern="[0-9]+" maxlength="9" value="{{ form_data.current_occupants or '' }}" placeholder="例：120">
+      </div>
+      <div class="shelter-field">
+        <label for="crowd_status">混雑状況</label>
+        <select id="crowd_status" name="crowd_status" required>
+          {% for value in ('未登録', '空きあり', '混雑', '満員') %}
+            <option value="{{ value }}" {% if form_data.crowd_status == value %}selected{% endif %}>{{ value }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <p class="shelter-map-note" role="note">国土地理院の住所検索を使い、登録した住所から緯度・経度を自動取得して地図に表示します。位置を取得できない場合は登録を完了できません。</p>
 
       <fieldset class="shelter-options">
         <legend>対応可能な災害種別</legend>
@@ -258,7 +297,13 @@
               {% else %}未登録{% endif %}
             </p>
             <p>開設状況：{{ shelter.status or shelter.opening_status or '未登録' }}</p>
+            <p>混雑状況：{{ shelter.crowd_status or '未登録' }}</p>
+            <p>地図：{% if shelter.latitude is defined and shelter.longitude is defined %}位置情報登録済み{% else %}位置情報未登録{% endif %}</p>
             <a class="shelter-edit-link" href="{{ url_for('shelter_register', edit=shelter.id) }}">編集</a>
+            <form class="shelter-delete-form" method="post" action="{{ url_for('delete_shelter', shelter_id=shelter.id) }}" data-confirm-delete data-shelter-name="{{ shelter.name or '名称未登録' }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <button class="shelter-delete-button" type="submit">削除</button>
+            </form>
           </li>
         {% endfor %}
       </ul>
@@ -271,6 +316,14 @@
 
 {% block scripts %}
 <script>
+  document.querySelectorAll('[data-confirm-delete]').forEach((form) => {
+    form.addEventListener('submit', (event) => {
+      if (!window.confirm(`「${form.dataset.shelterName}」を削除します。この操作は取り消せません。`)) {
+        event.preventDefault();
+      }
+    });
+  });
+
   document.querySelector('[data-confirm-shelter]')?.addEventListener('submit', (event) => {
     const form = event.currentTarget;
     const checkedLabels = (name) => Array.from(form.querySelectorAll(`input[name="${name}"]:checked`))
@@ -281,6 +334,9 @@
       `住所：${form.elements.address.value.trim()}`,
       `地域・地区：${form.elements.district.value.trim() || '未指定'}`,
       `収容人数：${form.elements.capacity.value.trim()}人`,
+      `現在の避難者数：${form.elements.current_occupants.value.trim() || '未登録'}人`,
+      `混雑状況：${form.elements.crowd_status.value}`,
+      '地図の位置情報：住所から自動取得',
       `災害種別：${checkedLabels('disasters')}`,
       `設備：${checkedLabels('facilities')}`,
       `開設状況：${form.elements.status.value}`

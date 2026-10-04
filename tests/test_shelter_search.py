@@ -178,6 +178,17 @@ class ShelterSearchTests(unittest.TestCase):
         self.assertIn('is-busy">混雑'.encode(), response.data)
         self.assertIn('is-full">満員'.encode(), response.data)
 
+    def test_registered_crowding_status_is_displayed(self):
+        with patch.object(
+            app_module,
+            'shelters',
+            [{'id': 14, 'name': '登録混雑施設', 'capacity': 100, 'current_occupants': 10, 'crowd_status': '満員'}]
+        ):
+            response = self.client.get('/search_results')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('is-full">満員'.encode(), response.data)
+
     def test_missing_comparison_fields_are_shown_as_unregistered(self):
         response = self.client.get('/search_results?keyword=%E9%9D%92%E8%91%89%E3%82%B3%E3%83%9F%E3%83%A5%E3%83%8B%E3%83%86%E3%82%A3')
 
@@ -186,7 +197,8 @@ class ShelterSearchTests(unittest.TestCase):
         self.assertIn('収容人数'.encode(), response.data)
         self.assertIn('現在の避難者数'.encode(), response.data)
         self.assertIn('未登録'.encode(), response.data)
-        self.assertNotIn('満員'.encode(), response.data)
+        page_content = response.data.split(b'<script', 1)[0]
+        self.assertNotIn('満員'.encode(), page_content)
 
     def test_empty_results_keep_search_and_home_navigation(self):
         response = self.client.get('/search_results?keyword=missing')
@@ -246,7 +258,8 @@ class ShelterSearchTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn('避難所データを読み込めませんでした'.encode(), response.data)
-        self.assertNotIn('条件に合う避難所が見つかりませんでした'.encode(), response.data)
+        page_content = response.data.split(b'<script', 1)[0]
+        self.assertNotIn('条件に合う避難所が見つかりませんでした'.encode(), page_content)
 
     def test_existing_home_page_remains_available(self):
         response = self.client.get('/')

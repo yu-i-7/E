@@ -110,15 +110,15 @@
 {% block content %}
 <section class="detail-card" aria-labelledby="detail-title">
   {% if shelter %}
-    <h2 id="detail-title">{{ shelter.name }}</h2>
+    <h2 id="detail-title" data-no-translate>{{ shelter.name }}</h2>
     <dl class="detail-list">
       <div class="detail-row">
         <dt>住所</dt>
-        <dd>{% if shelter.address %}{{ shelter.address }}{% else %}<span class="detail-unregistered">未登録</span>{% endif %}</dd>
+        <dd>{% if shelter.address %}<span data-no-translate>{{ shelter.address }}</span>{% else %}<span class="detail-unregistered">未登録</span>{% endif %}</dd>
       </div>
       <div class="detail-row">
         <dt>地域</dt>
-        <dd>{% if shelter.district %}{{ shelter.district }}{% else %}<span class="detail-unregistered">未登録</span>{% endif %}</dd>
+        <dd>{% if shelter.district %}<span data-no-translate>{{ shelter.district }}</span>{% else %}<span class="detail-unregistered">未登録</span>{% endif %}</dd>
       </div>
       <div class="detail-row">
         <dt>対応する災害種別</dt>
